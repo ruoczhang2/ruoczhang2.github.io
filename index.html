@@ -1,0 +1,38 @@
+<script>
+    // 使用新创建的服务访问令牌 (SAT)
+    const YOUR_SAT_TOKEN = 'sat_02gVccxXULXgsQ3OkYkrkp9s9n2UhsurDBsvtiTRWPcyW3BpNY4lFgdaVtr52slF'; // 👈 替换为你的 sat_ 令牌
+
+    function getOrCreateStudentId() {
+        let studentId = localStorage.getItem('coze_student_id');
+        if (!studentId) {
+            studentId = 'student_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+            localStorage.setItem('coze_student_id', studentId);
+        }
+        return studentId;
+    }
+
+    async function initChat() {
+        try {
+            const container = document.getElementById('chat-container');
+            container.innerHTML = '';
+
+            new CozeWebSDK.WebChatClient({
+                config: { bot_id: '7629241748220280842' },
+                componentProps: { title: '学术写作教练' },
+                auth: {
+                    type: 'token',
+                    token: YOUR_SAT_TOKEN,  // 👈 使用你的 SAT 令牌
+                    onRefreshToken: async () => YOUR_SAT_TOKEN,
+                },
+                userInfo: {
+                    id: getOrCreateStudentId(), // 确保每个学生有唯一ID以实现会话隔离
+                    nickname: '同学'
+                },
+                container: container,
+            });
+        } catch (error) {
+            // 处理错误...
+        }
+    }
+    // ...
+</script>
