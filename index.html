@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>学术写作重构与反检测教练</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Roboto', 'Noto Sans', system-ui, -apple-system, sans-serif;
+            background: #f5f7fb;
+        }
+
+        /* 顶部标题栏 */
+        .app-header {
+            background: linear-gradient(135deg, #1e2a3a 0%, #0f1724 100%);
+            color: white;
+            padding: 16px 24px;
+            text-align: center;
+            font-size: 1.3rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .app-header::before {
+            content: "📝";
+            font-size: 1.5rem;
+        }
+        .app-header::after {
+            content: "🤖";
+            font-size: 1.5rem;
+        }
+
+        /* 聊天容器 */
+        #chat-container {
+            width: 100%;
+            height: calc(100% - 70px);  /* 减去标题栏高度 */
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+        }
+
+        /* 加载提示 */
+        .loading-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #4b5563;
+            font-size: 1rem;
+            background: #f9fafb;
+        }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .error-message {
+            color: #dc2626;
+            background: #fee2e2;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 90%;
+            margin: 20px auto;
+        }
+    </style>
+    <!-- Coze Web SDK (官方最新稳定版) -->
+    <script src="https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0-beta.19/libs/cn/index.js"></script>
+</head>
+<body>
+    <div class="app-header">学术写作重构与反检测教练</div>
+    <div id="chat-container">
+        <div class="loading-placeholder" id="loading-indicator">
+            <div class="loading-spinner"></div>
+            <div>正在初始化智能助手，请稍候...</div>
+        </div>
+    </div>
+
+    <script>
+        // ======================== 配置区域（请务必修改）========================
+        // 🔑 1. 替换成你自己的【服务访问令牌 (SAT)】，以 sat_ 开头，确保无换行无空格
+        const YOUR_SAT_TOKEN = 'sat_02gVccxXULXgsQ3OkYkrkp9s9n2UhsurDBsvtiTRWPcyW3BpNY4lFgdaVtr52slF';
+        
+        // 🤖 2. 你的 Bot ID（通常不需要改，除非换了智能体）
+        const BOT_ID = '7629241748220280842';
+        // ====================================================================
+
+        // 辅助：为每个学生生成一个持久化的唯一ID（存在 localStorage 中）
+        function getOrCreateStudentId() {
+            const storageKey = 'academic_coach_user_id';
+            let userId = localStorage.getItem(storageKey);
+            if (!userId) {
+                // 生成唯一ID：时间戳 + 随机字符串
+                userId = 'student_' + Date.now() + '_' + Math.random().toString(36).substring(2, 14);
+                localStorage.setItem(storageKey, userId);
+            }
+            return userId;
+        }
+
+        // 初始化聊天窗口
+        async function initChat() {
+            const container = document.getElementById('chat-container');
+            const loadingDiv = document.getElementById('loading-indicator');
+            
+            // 检查 SDK 是否加载成功
+            if (typeof CozeWebSDK === 'undefined') {
+                if (loadingDiv) {
+                    loadingDiv.innerHTML = `<div class="error-message">
+                        ⚠️ 智能体组件加载失败，可能是网络原因。<br>
+                        请尝试 <a href="javascript:location.reload()">刷新页面</a> 或更换网络后重试。
+                    </div>`;
+                } else {
+                    container.innerHTML = `<div class="error-message">SDK 加载失败，请刷新页面。</div>`;
+                }
+                console.error('CozeWebSDK 未定义，请检查脚本地址是否可访问');
+                return;
+            }
+
+            // 获取学生唯一标识
+            const studentId = getOrCreateStudentId();
+            console.log('[会话隔离] 当前学生ID:', studentId);
+
+            // 清空 loading 占位
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+            container.innerHTML = '';   // 清空容器，准备渲染聊天界面
+
+            try {
+                // 创建聊天客户端 (使用 SAT + userInfo.id 实现会话隔离)
+                new CozeWebSDK.WebChatClient({
+                    config: {
+                        bot_id: BOT_ID,
+                    },
+                    componentProps: {
+                        title: '学术写作教练',
+                        // 可选：自定义欢迎语
+                        // defaultGreeting: '你好！我是你的学术写作教练，请粘贴需要改写的句子～'
+                    },
+                    auth: {
+                        type: 'token',
+                        token: YOUR_SAT_TOKEN,
+                        // token 刷新回调（直接返回原token，SAT长期有效）
+                        onRefreshToken: async () => YOUR_SAT_TOKEN,
+                    },
+                    userInfo: {
+                        id: studentId,          // 关键：每个学生独立身份
+                        nickname: '同学',
+                    },
+                    container: container,
+                });
+                console.log('聊天组件启动成功，等待用户交互...');
+            } catch (err) {
+                console.error('初始化 WebChatClient 失败:', err);
+                container.innerHTML = `<div class="error-message">
+                    初始化失败：${err.message || '未知错误'}<br>
+                    请刷新页面重试，或检查令牌是否有效。
+                </div>`;
+            }
+        }
+
+        // 页面加载完成后启动
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initChat);
+        } else {
+            initChat();
+        }
+    </script>
+</body>
+</html>
