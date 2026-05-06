@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>学术写作重构与反检测教练</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+        }
+        /* 顶部栏 */
+        .header {
+            background: #1e2a3a;
+            color: white;
+            padding: 14px 20px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        /* 聊天容器 - 强制明确高度 */
+        #chat-container {
+            width: 100%;
+            height: calc(100% - 60px);  /* 减去 header 高度 */
+            min-height: 500px;          /* 后备最小高度 */
+            background: #ffffff;
+            position: relative;
+        }
+        /* 加载提示 */
+        .loader {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #4b5563;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e5e7eb;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-bottom: 12px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .error-box {
+            background: #fee2e2;
+            color: #b91c1c;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            margin: 20px;
+        }
+    </style>
+    <!-- Coze Web SDK -->
+    <script src="https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0-beta.19/libs/cn/index.js"></script>
+</head>
+<body>
+    <div class="header">📝 学术写作重构与反检测教练 🤖</div>
+    <div id="chat-container">
+        <div class="loader" id="loading">
+            <div class="spinner"></div>
+            <div>正在启动智能助手，请稍候...</div>
+        </div>
+    </div>
+
+    <script>
+        // ========== 配置区域 ==========
+        const SAT_TOKEN = 'sat_02gVccxXULXgsQ3OkYkrkp9s9n2UhsurDBsvtiTRWPcyW3BpNY4lFgdaVtr52slF'; // 替换为你的 SAT
+        const BOT_ID = '7629241748220280842';  // 你的 Bot ID
+
+        // 生成/获取学生唯一ID（实现会话隔离）
+        function getStudentId() {
+            const key = 'coze_unique_student';
+            let id = localStorage.getItem(key);
+            if (!id) {
+                id = 'student_' + Date.now() + '_' + Math.random().toString(36).substring(2, 12);
+                localStorage.setItem(key, id);
+            }
+            return id;
+        }
+
+        // 强制刷新容器布局（解决某些情况下渲染不出的问题）
+        function forceResizeContainer() {
+            const container = document.getElementById('chat-container');
+            if (container) {
+                // 触发一次重排
+                container.style.display = 'none';
+                container.offsetHeight; // 强制重排
+                container.style.display = '';
+                // 通知窗口大小变化，让 iframe 重新适应
+                setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+            }
+        }
+
+        async function initChat() {
+            const container = document.getElementById('chat-container');
+            const loadingDiv = document.getElementById('loading');
+            
+            // 1. 检查 SDK 是否加载
+            if (typeof CozeWebSDK === 'undefined') {
+                if (loadingDiv) loadingDiv.innerHTML = '<div class="error-box">SDK 加载失败，请检查网络后刷新页面重试。</div>';
+                return;
+            }
+
+            // 2. 获取学生ID
+            const studentId = getStudentId();
+            console.log('[隔离ID]', studentId);
+
+            // 3. 移除 loading 元素
+            if (loadingDiv) loadingDiv.remove();
+            container.innerHTML = ''; // 清空容器
+
+            try {
+                // 4. 初始化聊天客户端
+                const client = new CozeWebSDK.WebChatClient({
+                    config: { bot_id: BOT_ID },
+                    componentProps: { title: '学术写作教练' },
+                    auth: {
+                        type: 'token',
+                        token: SAT_TOKEN,
+                        onRefreshToken: async () => SAT_TOKEN,
+                    },
+                    userInfo: {
+                        id: studentId,
+                        nickname: '同学'
+                    },
+                    container: container,
+                });
+                
+                console.log('WebChatClient 实例已创建, 等待渲染...');
+                
+                // 5. 延迟强制刷新布局（解决某些环境首次不显示的问题）
+                setTimeout(() => {
+                    forceResizeContainer();
+                    console.log('已触发容器重排，检查是否显示');
+                }, 500);
+                
+            } catch (err) {
+                console.error('初始化失败:', err);
+                container.innerHTML = `<div class="error-box">启动失败：${err.message || '未知错误'}<br>请刷新页面或检查令牌权限</div>`;
+            }
+        }
+
+        // 页面就绪后启动
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initChat);
+        } else {
+            initChat();
+        }
+    </script>
+</body>
+</html>
